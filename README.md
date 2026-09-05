@@ -1,4 +1,7 @@
-# Kaya — Physiotherapy Clinic App (v0)
+# eval-tagger — v0
+
+> Working codename: **eval-tagger** (neutral on purpose). Internally this is the
+> physiotherapy clinic app; product name is decided later.
 
 A course-completion system for small physiotherapy clinics. Their business is selling
 courses of sessions ("15 sessions, 3× a week"); the app's job is to make patients finish
