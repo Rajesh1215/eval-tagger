@@ -306,9 +306,12 @@ export function StartCourse({ episodeId, onClose }: { episodeId: string; onClose
   const [price, setPrice] = useState("");
   const [paid, setPaid] = useState("");
   const [firstDate, setFirstDate] = useState(addDays(today, 1));
+  // Defaults to whoever consulted — change if someone else runs the course.
+  const [physioId, setPhysioId] = useState(e.physioId);
   // Starts from the consult's assessment note so the doc extends it into the plan.
   const [note, setNote] = useState(e.note);
   const plannedN = parseInt(planned, 10) || 0;
+  const physios = db.staff.filter((s) => s.role === "physio" && s.active);
 
   const fieldCls =
     "w-full rounded-[10px] border border-line bg-white px-3.5 py-2.5 text-sm outline-none focus:border-accent";
@@ -362,14 +365,30 @@ export function StartCourse({ episodeId, onClose }: { episodeId: string; onClose
             />
           </div>
         </div>
-        <div>
-          <label className={label}>First session</label>
-          <input
-            type="date"
-            value={firstDate}
-            onChange={(ev) => setFirstDate(ev.target.value)}
-            className={`${fieldCls} tnum`}
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={label}>Primary physio</label>
+            <select
+              value={physioId}
+              onChange={(ev) => setPhysioId(ev.target.value)}
+              className={fieldCls}
+            >
+              {physios.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={label}>First session</label>
+            <input
+              type="date"
+              value={firstDate}
+              onChange={(ev) => setFirstDate(ev.target.value)}
+              className={`${fieldCls} tnum`}
+            />
+          </div>
         </div>
         <div>
           <label className={label}>Plan note</label>
@@ -389,6 +408,7 @@ export function StartCourse({ episodeId, onClose }: { episodeId: string; onClose
               price: parseFloat(price) || 0,
               paid: parseFloat(paid) || 0,
               firstDate,
+              physioId,
               note,
             });
             onClose();

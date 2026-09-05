@@ -139,6 +139,7 @@ export default function App() {
         price: s.price,
         status: "active",
         next: s.firstDate,
+        physioId: s.physioId,
         note: s.note.trim(),
         payments:
           s.paid > 0

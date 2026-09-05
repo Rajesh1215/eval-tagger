@@ -39,6 +39,7 @@ export interface StartCourseInput {
   price: number;
   paid: number;
   firstDate: string;
+  physioId: string; // who runs the course — may differ from who consulted
   note: string; // the doc's plan, kept as the (single) episode note
 }
 
