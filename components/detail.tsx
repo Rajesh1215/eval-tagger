@@ -1,14 +1,16 @@
 "use client";
 import { useRef, useState } from "react";
 import {
-  bucket, done, isAtRisk, outstanding, paidAhead, patientOf, staffName,
+  bucket, done, isAtRisk, outstanding, paidAhead, paidOf, patientOf, staffName,
 } from "@/lib/derive";
 import { fmtDay, inr } from "@/lib/format";
-import type { Session } from "@/lib/types";
+import type { Payment, Session } from "@/lib/types";
 import { useApp } from "./ctx";
+import { AddPayment } from "./overlays";
 
 export function EpisodeDetail({ id }: { id: string }) {
   const { db, today, role, openEpisode, openLogger, openBookNext, openNudge } = useApp();
+  const [paying, setPaying] = useState(false);
   const e = db.episodes.find((x) => x.id === id);
   if (!e) return null;
   const p = patientOf(db, e);
@@ -65,6 +67,19 @@ export function EpisodeDetail({ id }: { id: string }) {
             <span className="text-muted"> · {inr(ahead)} paid ahead</span>
           )}
         </div>
+        {e.price > 0 && (
+          <div className="mt-2 flex items-center justify-between gap-3 border-t border-line pt-2.5">
+            <span className="tnum text-sm text-muted">
+              Paid {inr(paidOf(e))} of {inr(e.price)}
+            </span>
+            <button
+              onClick={() => setPaying(true)}
+              className="rounded-full border border-accent px-3 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-soft"
+            >
+              + Add payment
+            </button>
+          </div>
+        )}
       </div>
 
       {/* actions */}
@@ -108,7 +123,10 @@ export function EpisodeDetail({ id }: { id: string }) {
       <PainChart sessions={e.sessions} />
       <EpisodeNote id={e.id} note={e.note} />
       <SessionsList sessions={e.sessions} />
+      <PaymentsList payments={e.payments} />
       <Docs episodeId={e.id} />
+
+      {paying && <AddPayment episodeId={e.id} onClose={() => setPaying(false)} />}
 
       {others.length > 0 && (
         <section>
@@ -251,6 +269,32 @@ function SessionsList({ sessions }: { sessions: Session[] }) {
                 <div className="border-t border-line bg-ground px-3 py-2.5 text-sm">
                   {s.notes ? s.notes : <span className="italic text-muted">No session note.</span>}
                 </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PaymentsList({ payments }: { payments: Payment[] }) {
+  if (payments.length === 0) return null;
+  const newestFirst = [...payments].sort((a, b) => (a.date < b.date ? 1 : -1));
+  return (
+    <section>
+      <SectionTitle>Payments</SectionTitle>
+      <div className="overflow-hidden rounded-[14px] border border-line bg-white">
+        <div className="divide-y divide-line">
+          {newestFirst.map((p) => (
+            <div key={p.id} className="flex items-center gap-2 p-3 text-sm">
+              <span className="tnum font-semibold">{inr(p.amount)}</span>
+              <span className="text-muted">·</span>
+              <span>{fmtDay(p.date)}</span>
+              <span className="text-muted">·</span>
+              <span className="text-muted">{p.mode}</span>
+              {p.note && (
+                <span className="min-w-0 flex-1 truncate text-right text-muted">{p.note}</span>
               )}
             </div>
           ))}

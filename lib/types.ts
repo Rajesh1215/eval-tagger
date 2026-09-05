@@ -33,6 +33,17 @@ export interface Doc {
   note: string; // one free-text note per photo
 }
 
+export const PAY_MODES = ["Cash", "UPI", "Card"] as const;
+export type PayMode = (typeof PAY_MODES)[number];
+
+export interface Payment {
+  id: string;
+  date: string; // ISO YYYY-MM-DD
+  amount: number;
+  mode: PayMode;
+  note: string;
+}
+
 export type EpisodeStatus = "active" | "completed" | "dropped";
 export type Freq = 1 | 2 | 3;
 
@@ -45,7 +56,7 @@ export interface Episode {
   planned: number; // sessions in the course
   freq: Freq; // per week
   price: number;
-  paid: number;
+  payments: Payment[]; // source of truth for money in — "paid" is derived (Σ amounts)
   next: string | null; // ISO date of next session, null = not booked
   status: EpisodeStatus;
   note: string; // single free-text episode note

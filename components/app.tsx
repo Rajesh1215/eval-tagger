@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { seed } from "@/lib/seed";
 import { todayISO } from "@/lib/derive";
 import type { DB, Episode } from "@/lib/types";
-import { Ctx, type AppCtx, type DemoRole, type IntakeInput, type SessionInput } from "./ctx";
+import { Ctx, type AppCtx, type DemoRole, type IntakeInput, type PaymentInput, type SessionInput } from "./ctx";
 import { DemoBar, Header, Toast } from "./chrome";
 import { Board } from "./board";
 import { PatientDetail, PatientsList } from "./patients";
@@ -82,6 +82,12 @@ export default function App() {
       });
     },
 
+    addPayment: (episodeId, p: PaymentInput) =>
+      updateEpisode(episodeId, (e) => ({
+        ...e,
+        payments: [...e.payments, { id: newId("pay"), ...p }],
+      })),
+
     bookNext: (episodeId, date) => updateEpisode(episodeId, (e) => ({ ...e, next: date })),
 
     markNudged: (ids) =>
@@ -125,7 +131,10 @@ export default function App() {
         planned: input.planned,
         freq: input.freq,
         price: input.price,
-        paid: input.paid,
+        payments:
+          input.paid > 0
+            ? [{ id: newId("pay"), date: today, amount: input.paid, mode: "Cash" as const, note: "Paid at intake" }]
+            : [],
         next: input.firstDate,
         status: "active",
         note: "",

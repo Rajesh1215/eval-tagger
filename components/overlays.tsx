@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import { addDays, done, patientOf, sessionGap } from "@/lib/derive";
-import { weekdayFull } from "@/lib/format";
-import { CLINIC_NAME, MODALITIES } from "@/lib/types";
+import { addDays, done, outstanding, patientOf, sessionGap } from "@/lib/derive";
+import { inr, weekdayFull } from "@/lib/format";
+import { CLINIC_NAME, MODALITIES, PAY_MODES, type PayMode } from "@/lib/types";
 import { useApp } from "./ctx";
 
 /** Bottom sheet on phone, centered modal on desktop. */
@@ -33,12 +33,104 @@ function Sheet({
 
 const label = "mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted";
 
+function ModeChips({ mode, setMode }: { mode: PayMode; setMode: (m: PayMode) => void }) {
+  return (
+    <div className="flex gap-2">
+      {PAY_MODES.map((m) => (
+        <button
+          key={m}
+          onClick={() => setMode(m)}
+          className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+            mode === m
+              ? "border-accent bg-soft font-semibold text-accent"
+              : "border-line text-muted hover:text-ink"
+          }`}
+        >
+          {m}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Mock payment recording — no gateway, just a row in payments[] (refresh = reset). */
+export function AddPayment({ episodeId, onClose }: { episodeId: string; onClose: () => void }) {
+  const { db, today, addPayment, toast } = useApp();
+  const e = db.episodes.find((x) => x.id === episodeId)!;
+  const p = patientOf(db, e);
+  const due = outstanding(e);
+
+  const [amount, setAmount] = useState(due > 0 ? String(due) : "");
+  const [date, setDate] = useState(today);
+  const [mode, setMode] = useState<PayMode>("UPI");
+  const [note, setNote] = useState("");
+  const amt = parseFloat(amount) || 0;
+
+  return (
+    <Sheet title={`Add payment · ${p.name}`} onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        {due > 0 ? (
+          <div className="tnum text-sm text-muted">
+            Balance <b className="text-amber-deep">{inr(due)}</b> of {inr(e.price)}
+          </div>
+        ) : (
+          <div className="text-sm text-muted">Fully paid — extra amounts count as paid ahead.</div>
+        )}
+        <div>
+          <label className={label}>Amount ₹</label>
+          <input
+            inputMode="numeric"
+            autoFocus
+            value={amount}
+            onChange={(ev) => setAmount(ev.target.value)}
+            className="tnum w-full rounded-[10px] border border-line bg-white px-3.5 py-2.5 text-lg font-semibold outline-none focus:border-accent"
+          />
+        </div>
+        <div>
+          <label className={label}>Mode</label>
+          <ModeChips mode={mode} setMode={setMode} />
+        </div>
+        <div>
+          <label className={label}>Date</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(ev) => setDate(ev.target.value)}
+            className="tnum w-full rounded-[10px] border border-line bg-white px-3.5 py-2.5 text-sm outline-none focus:border-accent"
+          />
+        </div>
+        <div>
+          <label className={label}>Note (optional)</label>
+          <input
+            value={note}
+            onChange={(ev) => setNote(ev.target.value)}
+            placeholder="e.g. balance for sessions 5–8"
+            className="w-full rounded-[10px] border border-line bg-white px-3.5 py-2.5 text-sm outline-none focus:border-accent"
+          />
+        </div>
+        <button
+          onClick={() => {
+            addPayment(episodeId, { amount: amt, date, mode, note: note.trim() });
+            onClose();
+            toast(`${inr(amt)} recorded ✓`);
+          }}
+          disabled={amt <= 0 || !date}
+          className="rounded-full bg-accent px-4 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Record payment
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 export function SessionLogger({ episodeId, onClose }: { episodeId: string; onClose: () => void }) {
-  const { db, today, logSession, toast } = useApp();
+  const { db, today, logSession, addPayment, toast } = useApp();
   const e = db.episodes.find((x) => x.id === episodeId)!;
   const p = patientOf(db, e);
   const n = done(e) + 1;
   const lastPain = e.sessions.length ? e.sessions[e.sessions.length - 1].pain : 5;
+  const due = outstanding(e);
 
   const [pain, setPain] = useState(lastPain);
   const [mods, setMods] = useState<string[]>(["Exercise"]);
@@ -48,14 +140,22 @@ export function SessionLogger({ episodeId, onClose }: { episodeId: string; onClo
   const [next, setNext] = useState<string>(
     n >= e.planned ? "" : addDays(today, sessionGap(e.freq))
   );
+  const [collecting, setCollecting] = useState(false);
+  const [collectAmt, setCollectAmt] = useState("");
+  const [collectMode, setCollectMode] = useState<PayMode>("UPI");
 
   const activeStaff = db.staff.filter((s) => s.active);
   const willComplete = n >= e.planned;
 
   const doneClick = () => {
     logSession(episodeId, { pain, mods, byId, notes: notes.trim(), next: next || null });
+    const amt = collecting ? parseFloat(collectAmt) || 0 : 0;
+    if (amt > 0) {
+      addPayment(episodeId, { amount: amt, date: today, mode: collectMode, note: `At session ${n}` });
+    }
     onClose();
-    toast(willComplete ? "Course complete 🎉" : `Session ${n} recorded ✓`);
+    const paidBit = amt > 0 ? ` · ${inr(amt)} collected` : "";
+    toast(willComplete ? `Course complete 🎉${paidBit}` : `Session ${n} recorded${paidBit} ✓`);
   };
 
   return (
@@ -124,6 +224,40 @@ export function SessionLogger({ episodeId, onClose }: { episodeId: string; onClo
             className="w-full resize-y rounded-[10px] border border-line bg-white px-3.5 py-2.5 text-sm outline-none focus:border-accent"
           />
         </div>
+
+        {!collecting ? (
+          <button
+            onClick={() => {
+              setCollecting(true);
+              setCollectAmt(due > 0 ? String(due) : "");
+            }}
+            className="self-start text-sm font-semibold text-accent hover:underline"
+          >
+            + Collect payment{due > 0 ? ` (balance ${inr(due)})` : ""}
+          </button>
+        ) : (
+          <div>
+            <label className={label}>
+              Collect ₹{due > 0 && <span className="tnum normal-case text-muted"> · balance {inr(due)}</span>}
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                inputMode="numeric"
+                value={collectAmt}
+                onChange={(ev) => setCollectAmt(ev.target.value)}
+                placeholder="0"
+                className="tnum w-28 rounded-[10px] border border-line bg-white px-3.5 py-2 text-sm font-semibold outline-none focus:border-accent"
+              />
+              <ModeChips mode={collectMode} setMode={setCollectMode} />
+              <button
+                onClick={() => setCollecting(false)}
+                className="text-sm text-muted hover:text-ink"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {!willComplete && (
           <div>

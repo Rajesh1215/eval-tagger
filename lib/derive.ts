@@ -39,11 +39,14 @@ export const lastVisit = (e: Episode): string =>
 
 export const perSession = (e: Episode): number => (e.planned > 0 ? e.price / e.planned : 0);
 
+/** Total paid so far — derived from the payment rows. */
+export const paidOf = (e: Episode): number => e.payments.reduce((sum, p) => sum + p.amount, 0);
+
 /** "to collect" */
-export const outstanding = (e: Episode): number => Math.max(0, e.price - e.paid);
+export const outstanding = (e: Episode): number => Math.max(0, e.price - paidOf(e));
 
 /** "paid, sessions not delivered" */
-export const paidAhead = (e: Episode): number => Math.max(0, e.paid - perSession(e) * done(e));
+export const paidAhead = (e: Episode): number => Math.max(0, paidOf(e) - perSession(e) * done(e));
 
 /** ₹ at risk on one episode (used only for sorting/row display of at-risk rows). */
 export const riskAmount = (e: Episode): number => outstanding(e) + paidAhead(e);

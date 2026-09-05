@@ -1,7 +1,7 @@
 // Seed data — ~15 realistic episodes spread across every bucket. All dates are
 // generated relative to the runtime date so the demo always looks current.
 import { addDays, sessionGap, todayISO } from "./derive";
-import type { DB, Doc, Episode, Freq, Session } from "./types";
+import type { DB, Doc, Episode, Freq, PayMode, Payment, Session } from "./types";
 
 // A believable "photo" for seeded docs (real uploads use object URLs).
 function photoDataUrl(title: string, lines: string[]): string {
@@ -54,10 +54,27 @@ function mkSessions(today: string, spec: SessionSpec): Session[] {
   return sessions;
 }
 
+/** Turn a seeded "paid so far" total into believable payment rows. */
+function mkPayments(paid: number, start: string, sessions: Session[], seq: number): Payment[] {
+  if (paid <= 0) return [];
+  const modes: PayMode[] = ["Cash", "UPI", "UPI", "Cash", "Card"];
+  const mode = modes[seq % modes.length];
+  // Larger amounts arrive in two installments — advance at intake, rest mid-course.
+  if (paid > 3000 && sessions.length > 2) {
+    const first = Math.round(paid / 2 / 100) * 100;
+    return [
+      { id: `pay${seq}a`, date: start, amount: first, mode, note: "Advance at intake" },
+      { id: `pay${seq}b`, date: sessions[2].date, amount: paid - first, mode: mode === "Cash" ? "UPI" : "Cash", note: "" },
+    ];
+  }
+  return [{ id: `pay${seq}a`, date: start, amount: paid, mode, note: "Advance at intake" }];
+}
+
 let epSeq = 0;
 function ep(
   today: string,
-  base: Omit<Episode, "id" | "sessions" | "docs" | "note" | "nudged" | "start"> & {
+  base: Omit<Episode, "id" | "sessions" | "docs" | "note" | "nudged" | "start" | "payments"> & {
+    paid: number;
     note?: string;
     nudged?: boolean;
     docs?: Doc[];
@@ -65,6 +82,7 @@ function ep(
   spec: Omit<SessionSpec, "freq">
 ): Episode {
   epSeq += 1;
+  const { paid, ...rest } = base;
   const sessions = mkSessions(today, { ...spec, freq: base.freq });
   const start = sessions.length
     ? addDays(sessions[0].date, -1)
@@ -74,7 +92,8 @@ function ep(
     note: "",
     nudged: false,
     docs: [],
-    ...base,
+    ...rest,
+    payments: mkPayments(paid, start, sessions, epSeq),
     sessions,
     start,
   };

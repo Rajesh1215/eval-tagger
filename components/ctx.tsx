@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useContext } from "react";
-import type { DB, Doc, Episode, Freq, Patient } from "@/lib/types";
+import type { DB, Doc, Episode, Freq, Patient, PayMode } from "@/lib/types";
 
 export type DemoRole = "owner" | "reception";
 
@@ -10,6 +10,13 @@ export interface SessionInput {
   byId: string;
   notes: string;
   next: string | null;
+}
+
+export interface PaymentInput {
+  amount: number;
+  date: string;
+  mode: PayMode;
+  note: string;
 }
 
 export interface IntakeInput {
@@ -48,6 +55,7 @@ export interface AppCtx {
 
   // data actions (in-memory only; refresh = reset)
   logSession(episodeId: string, s: SessionInput): void;
+  addPayment(episodeId: string, p: PaymentInput): void;
   bookNext(episodeId: string, date: string): void;
   markNudged(episodeIds: string[]): void;
   setEpisodeNote(episodeId: string, note: string): void;
