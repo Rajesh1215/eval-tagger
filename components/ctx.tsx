@@ -39,6 +39,7 @@ export interface StartCourseInput {
   price: number;
   paid: number;
   firstDate: string;
+  note: string; // the doc's plan, kept as the (single) episode note
 }
 
 export interface IntakeInput {
@@ -57,6 +58,7 @@ export interface IntakeInput {
   price: number;
   paid: number;
   firstDate: string;
+  note: string;
   prescription?: { url: string; note: string } | null;
 }
 

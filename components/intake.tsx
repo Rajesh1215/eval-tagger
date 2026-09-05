@@ -17,6 +17,7 @@ export function IntakeForm({ patientId }: { patientId?: string }) {
   const [path, setPath] = useState<"course" | "consult">("course");
   const [fee, setFee] = useState("");
   const [consultNote, setConsultNote] = useState("");
+  const [planNote, setPlanNote] = useState("");
   const [phone, setPhone] = useState("");
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [dupDismissed, setDupDismissed] = useState(false);
@@ -84,6 +85,7 @@ export function IntakeForm({ patientId }: { patientId?: string }) {
       price: parseFloat(price) || 0,
       paid: parseFloat(paid) || 0,
       firstDate,
+      note: planNote,
       prescription: rx,
     });
     closeIntake();
@@ -280,6 +282,16 @@ export function IntakeForm({ patientId }: { patientId?: string }) {
               className={`${field} tnum`}
               value={firstDate}
               onChange={(ev) => setFirstDate(ev.target.value)}
+            />
+          </div>
+          <div className="col-span-2">
+            <label className={label}>Plan note (optional)</label>
+            <textarea
+              rows={2}
+              className={`${field} resize-y`}
+              placeholder="The doc's plan — e.g. 12 sessions 3×/wk, quads strengthening…"
+              value={planNote}
+              onChange={(ev) => setPlanNote(ev.target.value)}
             />
           </div>
         </div>

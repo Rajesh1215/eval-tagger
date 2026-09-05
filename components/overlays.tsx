@@ -306,6 +306,8 @@ export function StartCourse({ episodeId, onClose }: { episodeId: string; onClose
   const [price, setPrice] = useState("");
   const [paid, setPaid] = useState("");
   const [firstDate, setFirstDate] = useState(addDays(today, 1));
+  // Starts from the consult's assessment note so the doc extends it into the plan.
+  const [note, setNote] = useState(e.note);
   const plannedN = parseInt(planned, 10) || 0;
 
   const fieldCls =
@@ -369,6 +371,16 @@ export function StartCourse({ episodeId, onClose }: { episodeId: string; onClose
             className={`${fieldCls} tnum`}
           />
         </div>
+        <div>
+          <label className={label}>Plan note</label>
+          <textarea
+            rows={3}
+            value={note}
+            onChange={(ev) => setNote(ev.target.value)}
+            placeholder="e.g. 12 sessions 3×/wk — quads strengthening, review ROM at S6…"
+            className={`${fieldCls} resize-y`}
+          />
+        </div>
         <button
           onClick={() => {
             startCourse(episodeId, {
@@ -377,6 +389,7 @@ export function StartCourse({ episodeId, onClose }: { episodeId: string; onClose
               price: parseFloat(price) || 0,
               paid: parseFloat(paid) || 0,
               firstDate,
+              note,
             });
             onClose();
             openEpisode(episodeId);

@@ -139,6 +139,7 @@ export default function App() {
         price: s.price,
         status: "active",
         next: s.firstDate,
+        note: s.note.trim(),
         payments:
           s.paid > 0
             ? [
@@ -169,7 +170,7 @@ export default function App() {
             : [],
         next: input.firstDate,
         status: "active",
-        note: "",
+        note: input.note.trim(),
         sessions: [],
         docs: input.prescription
           ? [{ id: newId("d"), url: input.prescription.url, note: input.prescription.note }]
