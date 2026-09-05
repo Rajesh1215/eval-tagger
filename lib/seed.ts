@@ -63,11 +63,11 @@ function mkPayments(paid: number, start: string, sessions: Session[], seq: numbe
   if (paid > 3000 && sessions.length > 2) {
     const first = Math.round(paid / 2 / 100) * 100;
     return [
-      { id: `pay${seq}a`, date: start, amount: first, mode, note: "Advance at intake" },
-      { id: `pay${seq}b`, date: sessions[2].date, amount: paid - first, mode: mode === "Cash" ? "UPI" : "Cash", note: "" },
+      { id: `pay${seq}a`, date: start, amount: first, mode, kind: "course", note: "Advance at intake" },
+      { id: `pay${seq}b`, date: sessions[2].date, amount: paid - first, mode: mode === "Cash" ? "UPI" : "Cash", kind: "course", note: "" },
     ];
   }
-  return [{ id: `pay${seq}a`, date: start, amount: paid, mode, note: "Advance at intake" }];
+  return [{ id: `pay${seq}a`, date: start, amount: paid, mode, kind: "course", note: "Advance at intake" }];
 }
 
 let epSeq = 0;
@@ -75,6 +75,8 @@ function ep(
   today: string,
   base: Omit<Episode, "id" | "sessions" | "docs" | "note" | "nudged" | "start" | "payments"> & {
     paid: number;
+    consultFee?: number;
+    startDaysAgo?: number; // used when there are no sessions to anchor the start date
     note?: string;
     nudged?: boolean;
     docs?: Doc[];
@@ -82,18 +84,24 @@ function ep(
   spec: Omit<SessionSpec, "freq">
 ): Episode {
   epSeq += 1;
-  const { paid, ...rest } = base;
+  const { paid, consultFee, startDaysAgo, ...rest } = base;
   const sessions = mkSessions(today, { ...spec, freq: base.freq });
   const start = sessions.length
     ? addDays(sessions[0].date, -1)
-    : addDays(today, -3);
+    : addDays(today, -(startDaysAgo ?? 3));
+  const payments = mkPayments(paid, start, sessions, epSeq);
+  if (consultFee && consultFee > 0) {
+    payments.unshift({
+      id: `pay${epSeq}c`, date: start, amount: consultFee, mode: "UPI", kind: "consult", note: "Consult fee",
+    });
+  }
   return {
     id: `e${epSeq}`,
     note: "",
     nudged: false,
     docs: [],
     ...rest,
-    payments: mkPayments(paid, start, sessions, epSeq),
+    payments,
     sessions,
     start,
   };
@@ -129,6 +137,8 @@ export function seed(): DB {
     { id: "p13", name: "Vignesh Iyer", phone: "99400 55667", age: 28, gender: "M" as const },
     { id: "p14", name: "Ganesh Murthy", phone: "94430 22334", age: 60, gender: "M" as const },
     { id: "p15", name: "Farida Begum", phone: "98860 88990", age: 50, gender: "F" as const },
+    { id: "p16", name: "Rekha Pillai", phone: "97450 66112", age: 39, gender: "F" as const },
+    { id: "p17", name: "Amit Jain", phone: "98200 44771", age: 33, gender: "M" as const },
   ];
 
   const episodes: Episode[] = [
@@ -299,6 +309,29 @@ export function seed(): DB {
       },
       { count: 5, lastDaysAgo: 45, startPain: 6, byIds: ["s1", "s5"], mods: ["IFT", "Exercise"] }
     ),
+    // ---- Consultations (plan not yet decided) ----
+    ep(
+      t,
+      {
+        patientId: "p16", complaint: "Shoulder pain (R)", doctor: "Dr. Iyer (Ortho)",
+        physioId: "s2", planned: 0, freq: 3, price: 0, paid: 0, consultFee: 400,
+        next: null, status: "consult", startDaysAgo: 1,
+        note: "Assessment done — likely impingement. Plan to be discussed after X-ray.",
+      },
+      { count: 0, lastDaysAgo: 0, startPain: 0, byIds: ["s2"], mods: [] }
+    ),
+    // Stale consult — paid the fee 6 days ago but never started the course.
+    ep(
+      t,
+      {
+        patientId: "p17", complaint: "Low back pain", doctor: "Walk-in",
+        physioId: "s1", planned: 0, freq: 3, price: 0, paid: 0, consultFee: 500,
+        next: null, status: "consult", startDaysAgo: 6,
+        note: "Suggested 12 sessions. Wants to discuss with family first.",
+      },
+      { count: 0, lastDaysAgo: 0, startPain: 0, byIds: ["s1"], mods: [] }
+    ),
+
     // Lakshmi's earlier episode → demos "Other episodes" on her detail view.
     ep(
       t,

@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useContext } from "react";
-import type { DB, Doc, Episode, Freq, Patient, PayMode } from "@/lib/types";
+import type { DB, Doc, Episode, Freq, Patient, PayKind, PayMode } from "@/lib/types";
 
 export type DemoRole = "owner" | "reception";
 
@@ -16,7 +16,29 @@ export interface PaymentInput {
   amount: number;
   date: string;
   mode: PayMode;
+  kind: PayKind;
   note: string;
+}
+
+export interface ConsultInput {
+  patientId?: string;
+  name?: string;
+  phone?: string;
+  age?: number;
+  complaint: string;
+  doctor: string;
+  physioId: string;
+  fee: number;
+  note: string;
+  prescription?: { url: string; note: string } | null;
+}
+
+export interface StartCourseInput {
+  planned: number;
+  freq: Freq;
+  price: number;
+  paid: number;
+  firstDate: string;
 }
 
 export interface IntakeInput {
@@ -49,6 +71,7 @@ export interface AppCtx {
   openIntake(patientId?: string): void;
   closeIntake(): void;
   openLogger(episodeId: string): void;
+  openStartCourse(episodeId: string): void;
   openBookNext(episodeId: string): void;
   openNudge(episodeIds: string[]): void;
   toast(msg: string): void;
@@ -62,6 +85,9 @@ export interface AppCtx {
   addDoc(episodeId: string, url: string): void;
   setDocNote(episodeId: string, docId: string, note: string): void;
   createIntake(input: IntakeInput): string; // returns new episode id
+  createConsult(input: ConsultInput): string; // returns new episode id
+  startCourse(episodeId: string, s: StartCourseInput): void;
+  dropEpisode(episodeId: string): void;
 }
 
 export const Ctx = createContext<AppCtx | null>(null);

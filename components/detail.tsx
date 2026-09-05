@@ -1,7 +1,8 @@
 "use client";
 import { useRef, useState } from "react";
 import {
-  bucket, done, isAtRisk, outstanding, paidAhead, paidOf, patientOf, staffName,
+  bucket, consultFeeOf, daysBetween, done, isAtRisk, outstanding, paidAhead, paidOf,
+  patientOf, staffName,
 } from "@/lib/derive";
 import { fmtDay, inr } from "@/lib/format";
 import type { Payment, Session } from "@/lib/types";
@@ -9,8 +10,12 @@ import { useApp } from "./ctx";
 import { AddPayment } from "./overlays";
 
 export function EpisodeDetail({ id }: { id: string }) {
-  const { db, today, role, openEpisode, openLogger, openBookNext, openNudge } = useApp();
+  const {
+    db, today, role, openEpisode, openLogger, openStartCourse, openBookNext, openNudge,
+    dropEpisode, toast,
+  } = useApp();
   const [paying, setPaying] = useState(false);
+  const [confirmDrop, setConfirmDrop] = useState(false);
   const e = db.episodes.find((x) => x.id === id);
   if (!e) return null;
   const p = patientOf(db, e);
@@ -37,15 +42,65 @@ export function EpisodeDetail({ id }: { id: string }) {
         {e.status !== "active" && (
           <span
             className={`mt-2 inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${
-              e.status === "completed" ? "bg-soft text-accent" : "bg-danger/10 text-danger"
+              e.status === "consult"
+                ? "bg-amber/10 text-amber-deep"
+                : e.status === "completed"
+                  ? "bg-soft text-accent"
+                  : "bg-danger/10 text-danger"
             }`}
           >
-            {e.status === "completed" ? "Course completed" : "Dropped"}
+            {e.status === "consult"
+              ? "Consultation"
+              : e.status === "completed"
+                ? "Course completed"
+                : "Dropped"}
           </span>
         )}
       </div>
 
+      {/* consultation stage — plan not decided yet */}
+      {e.status === "consult" && (
+        <>
+          <div className="rounded-[14px] border border-amber/40 bg-amber/5 p-4">
+            <div className="text-sm font-semibold text-amber-deep">
+              Waiting {daysBetween(e.start, today) === 0 ? "since today" : `${daysBetween(e.start, today)}d`} for course to start
+            </div>
+            <div className="tnum mt-1 text-sm text-muted">
+              {consultFeeOf(e) > 0
+                ? `Consult fee ${inr(consultFeeOf(e))} paid`
+                : "Consult fee not recorded"}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => openStartCourse(e.id)}
+              className="rounded-full bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+            >
+              Start course
+            </button>
+            <button
+              onClick={() => {
+                if (confirmDrop) {
+                  dropEpisode(e.id);
+                  toast("Marked as not proceeding");
+                } else {
+                  setConfirmDrop(true);
+                }
+              }}
+              className={`rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors ${
+                confirmDrop
+                  ? "border-danger bg-danger/10 text-danger"
+                  : "border-line text-muted hover:border-danger hover:text-danger"
+              }`}
+            >
+              {confirmDrop ? "Tap again to confirm" : "Didn't proceed"}
+            </button>
+          </div>
+        </>
+      )}
+
       {/* progress */}
+      {e.status !== "consult" && (
       <div className="rounded-[14px] border border-line bg-white p-4">
         <div className="flex flex-wrap gap-1">
           {Array.from({ length: e.planned }, (_, i) => (
@@ -81,6 +136,7 @@ export function EpisodeDetail({ id }: { id: string }) {
           </div>
         )}
       </div>
+      )}
 
       {/* actions */}
       {active && (
@@ -149,12 +205,20 @@ export function EpisodeDetail({ id }: { id: string }) {
                     className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
                       o.status === "active"
                         ? "bg-soft text-accent"
-                        : o.status === "completed"
-                          ? "bg-line text-muted"
-                          : "bg-danger/10 text-danger"
+                        : o.status === "consult"
+                          ? "bg-amber/10 text-amber-deep"
+                          : o.status === "completed"
+                            ? "bg-line text-muted"
+                            : "bg-danger/10 text-danger"
                     }`}
                   >
-                    {o.status === "active" ? "Active" : o.status === "completed" ? "Completed" : "Dropped"}
+                    {o.status === "active"
+                      ? "Active"
+                      : o.status === "consult"
+                        ? "Consult"
+                        : o.status === "completed"
+                          ? "Completed"
+                          : "Dropped"}
                   </span>
                 </button>
               ))}
@@ -293,7 +357,12 @@ function PaymentsList({ payments }: { payments: Payment[] }) {
               <span>{fmtDay(p.date)}</span>
               <span className="text-muted">·</span>
               <span className="text-muted">{p.mode}</span>
-              {p.note && (
+              {p.kind === "consult" && (
+                <span className="rounded-full bg-amber/10 px-2 py-0.5 text-xs font-semibold text-amber-deep">
+                  Consult fee
+                </span>
+              )}
+              {p.note && p.kind !== "consult" && (
                 <span className="min-w-0 flex-1 truncate text-right text-muted">{p.note}</span>
               )}
             </div>

@@ -36,15 +36,20 @@ export interface Doc {
 export const PAY_MODES = ["Cash", "UPI", "Card"] as const;
 export type PayMode = (typeof PAY_MODES)[number];
 
+/** Consult fees stay OUT of the course money math — the two mean different things. */
+export type PayKind = "consult" | "course";
+
 export interface Payment {
   id: string;
   date: string; // ISO YYYY-MM-DD
   amount: number;
   mode: PayMode;
+  kind: PayKind;
   note: string;
 }
 
-export type EpisodeStatus = "active" | "completed" | "dropped";
+/** consult → active → completed/dropped (drop possible straight from consult). */
+export type EpisodeStatus = "consult" | "active" | "completed" | "dropped";
 export type Freq = 1 | 2 | 3;
 
 export interface Episode {

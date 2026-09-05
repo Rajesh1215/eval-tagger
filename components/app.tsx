@@ -2,14 +2,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { seed } from "@/lib/seed";
 import { todayISO } from "@/lib/derive";
-import type { DB, Episode } from "@/lib/types";
-import { Ctx, type AppCtx, type DemoRole, type IntakeInput, type PaymentInput, type SessionInput } from "./ctx";
+import type { DB, Episode, Patient } from "@/lib/types";
+import {
+  Ctx, type AppCtx, type ConsultInput, type DemoRole, type IntakeInput,
+  type PaymentInput, type SessionInput, type StartCourseInput,
+} from "./ctx";
 import { DemoBar, Header, Toast } from "./chrome";
 import { Board } from "./board";
 import { PatientDetail, PatientsList } from "./patients";
 import { EpisodeDetail } from "./detail";
 import { IntakeForm } from "./intake";
-import { BookNext, SessionLogger, WhatsAppPreview } from "./overlays";
+import { BookNext, SessionLogger, StartCourse, WhatsAppPreview } from "./overlays";
 import type { Tab } from "@/lib/derive";
 
 let idSeq = 0;
@@ -30,6 +33,7 @@ export default function App() {
   const [selPatient, setSelPatient] = useState<string | null>(null);
   const [intake, setIntake] = useState<{ patientId?: string } | null>(null);
   const [loggerEp, setLoggerEp] = useState<string | null>(null);
+  const [startEp, setStartEp] = useState<string | null>(null);
   const [bookEp, setBookEp] = useState<string | null>(null);
   const [nudgeIds, setNudgeIds] = useState<string[] | null>(null);
   const [toastMsg, setToastMsg] = useState<{ id: number; msg: string } | null>(null);
@@ -49,6 +53,22 @@ export default function App() {
     }));
   }, []);
 
+  const resolvePatient = (input: {
+    patientId?: string;
+    name?: string;
+    phone?: string;
+    age?: number;
+  }): { patientId: string; newPatient: Patient | null } => {
+    if (input.patientId) return { patientId: input.patientId, newPatient: null };
+    const p: Patient = {
+      id: newId("p"),
+      name: (input.name ?? "").trim(),
+      phone: (input.phone ?? "").trim(),
+      age: input.age,
+    };
+    return { patientId: p.id, newPatient: p };
+  };
+
   const ctx: AppCtx = {
     db,
     today,
@@ -62,6 +82,7 @@ export default function App() {
     openIntake: (patientId) => setIntake({ patientId }),
     closeIntake: () => setIntake(null),
     openLogger: (id) => setLoggerEp(id),
+    openStartCourse: (id) => setStartEp(id),
     openBookNext: (id) => setBookEp(id),
     openNudge: (ids) => setNudgeIds(ids),
     toast,
@@ -110,18 +131,29 @@ export default function App() {
         docs: e.docs.map((d) => (d.id === docId ? { ...d, note } : d)),
       })),
 
+    startCourse: (episodeId, s: StartCourseInput) =>
+      updateEpisode(episodeId, (e) => ({
+        ...e,
+        planned: s.planned,
+        freq: s.freq,
+        price: s.price,
+        status: "active",
+        next: s.firstDate,
+        payments:
+          s.paid > 0
+            ? [
+                ...e.payments,
+                { id: newId("pay"), date: today, amount: s.paid, mode: "Cash" as const, kind: "course" as const, note: "At course start" },
+              ]
+            : e.payments,
+      })),
+
+    dropEpisode: (episodeId) =>
+      updateEpisode(episodeId, (e) => ({ ...e, status: "dropped", next: null })),
+
     createIntake: (input: IntakeInput) => {
-      let patientId = input.patientId;
+      const { patientId, newPatient } = resolvePatient(input);
       const episodeId = newId("e");
-      const newPatient =
-        patientId == null
-          ? {
-              id: (patientId = newId("p")),
-              name: input.name!.trim(),
-              phone: (input.phone ?? "").trim(),
-              age: input.age,
-            }
-          : null;
       const episode: Episode = {
         id: episodeId,
         patientId,
@@ -133,11 +165,45 @@ export default function App() {
         price: input.price,
         payments:
           input.paid > 0
-            ? [{ id: newId("pay"), date: today, amount: input.paid, mode: "Cash" as const, note: "Paid at intake" }]
+            ? [{ id: newId("pay"), date: today, amount: input.paid, mode: "Cash" as const, kind: "course" as const, note: "Paid at intake" }]
             : [],
         next: input.firstDate,
         status: "active",
         note: "",
+        sessions: [],
+        docs: input.prescription
+          ? [{ id: newId("d"), url: input.prescription.url, note: input.prescription.note }]
+          : [],
+        nudged: false,
+        start: today,
+      };
+      setDb((prev) => ({
+        ...prev,
+        patients: newPatient ? [...prev.patients, newPatient] : prev.patients,
+        episodes: [...prev.episodes, episode],
+      }));
+      return episodeId;
+    },
+
+    createConsult: (input: ConsultInput) => {
+      const { patientId, newPatient } = resolvePatient(input);
+      const episodeId = newId("e");
+      const episode: Episode = {
+        id: episodeId,
+        patientId,
+        complaint: input.complaint.trim(),
+        doctor: input.doctor,
+        physioId: input.physioId,
+        planned: 0,
+        freq: 3,
+        price: 0,
+        payments:
+          input.fee > 0
+            ? [{ id: newId("pay"), date: today, amount: input.fee, mode: "Cash" as const, kind: "consult" as const, note: "Consult fee" }]
+            : [],
+        next: null,
+        status: "consult",
+        note: input.note.trim(),
         sessions: [],
         docs: input.prescription
           ? [{ id: newId("d"), url: input.prescription.url, note: input.prescription.note }]
@@ -224,6 +290,7 @@ export default function App() {
         </div>
 
         {loggerEp && <SessionLogger episodeId={loggerEp} onClose={() => setLoggerEp(null)} />}
+        {startEp && <StartCourse episodeId={startEp} onClose={() => setStartEp(null)} />}
         {bookEp && <BookNext episodeId={bookEp} onClose={() => setBookEp(null)} />}
         {nudgeIds && <WhatsAppPreview episodeIds={nudgeIds} onClose={() => setNudgeIds(null)} />}
         {toastMsg && <Toast key={toastMsg.id} msg={toastMsg.msg} />}

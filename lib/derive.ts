@@ -39,8 +39,13 @@ export const lastVisit = (e: Episode): string =>
 
 export const perSession = (e: Episode): number => (e.planned > 0 ? e.price / e.planned : 0);
 
-/** Total paid so far — derived from the payment rows. */
-export const paidOf = (e: Episode): number => e.payments.reduce((sum, p) => sum + p.amount, 0);
+/** Total paid toward the course — consult fees excluded. */
+export const paidOf = (e: Episode): number =>
+  e.payments.reduce((sum, p) => (p.kind === "course" ? sum + p.amount : sum), 0);
+
+/** Consultation fee collected (usually one row). */
+export const consultFeeOf = (e: Episode): number =>
+  e.payments.reduce((sum, p) => (p.kind === "consult" ? sum + p.amount : sum), 0);
 
 /** "to collect" */
 export const outstanding = (e: Episode): number => Math.max(0, e.price - paidOf(e));
@@ -91,7 +96,7 @@ export function moneyAtRisk(db: DB, today: string): { toCollect: number; paidAhe
 
 // ---- tab lists (pure; components only render these) ----
 
-export type Tab = "today" | "missed" | "nodate" | "upcoming" | "completed" | "all";
+export type Tab = "today" | "missed" | "nodate" | "consult" | "upcoming" | "completed" | "all";
 
 /** Today rows: due today and not yet logged, time-ordered (stable by name). */
 export const todayRows = (db: DB, today: string): Episode[] =>
@@ -120,9 +125,15 @@ export const upcomingRows = (db: DB, today: string): Episode[] =>
     .filter((e) => bucket(e, today) === "upcoming")
     .sort((a, b) => (a.next! < b.next! ? -1 : a.next! > b.next! ? 1 : 0));
 
+/** Consultations that haven't converted to a course yet — longest waiting first. */
+export const consultRows = (db: DB): Episode[] =>
+  db.episodes
+    .filter((e) => e.status === "consult")
+    .sort((a, b) => (a.start < b.start ? -1 : 1));
+
 export const completedRows = (db: DB): Episode[] =>
   db.episodes
-    .filter((e) => e.status !== "active")
+    .filter((e) => e.status === "completed" || e.status === "dropped")
     .sort((a, b) => (lastVisit(b) < lastVisit(a) ? -1 : 1));
 
 export const allRows = (db: DB): Episode[] =>
@@ -133,6 +144,7 @@ export function tabCounts(db: DB, today: string): Record<Tab, number> {
     today: todayRows(db, today).length,
     missed: missedRows(db, today).length,
     nodate: noDateRows(db, today).length,
+    consult: consultRows(db).length,
     upcoming: upcomingRows(db, today).length,
     completed: completedRows(db).length,
     all: db.episodes.length,

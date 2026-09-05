@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import { addDays, done, outstanding, patientOf, sessionGap } from "@/lib/derive";
+import { addDays, daysBetween, done, outstanding, patientOf, sessionGap } from "@/lib/derive";
 import { inr, weekdayFull } from "@/lib/format";
-import { CLINIC_NAME, MODALITIES, PAY_MODES, type PayMode } from "@/lib/types";
+import { CLINIC_NAME, MODALITIES, PAY_MODES, type Freq, type PayMode } from "@/lib/types";
 import { useApp } from "./ctx";
 
 /** Bottom sheet on phone, centered modal on desktop. */
@@ -110,7 +110,7 @@ export function AddPayment({ episodeId, onClose }: { episodeId: string; onClose:
         </div>
         <button
           onClick={() => {
-            addPayment(episodeId, { amount: amt, date, mode, note: note.trim() });
+            addPayment(episodeId, { amount: amt, date, mode, kind: "course", note: note.trim() });
             onClose();
             toast(`${inr(amt)} recorded ✓`);
           }}
@@ -151,7 +151,7 @@ export function SessionLogger({ episodeId, onClose }: { episodeId: string; onClo
     logSession(episodeId, { pain, mods, byId, notes: notes.trim(), next: next || null });
     const amt = collecting ? parseFloat(collectAmt) || 0 : 0;
     if (amt > 0) {
-      addPayment(episodeId, { amount: amt, date: today, mode: collectMode, note: `At session ${n}` });
+      addPayment(episodeId, { amount: amt, date: today, mode: collectMode, kind: "course", note: `At session ${n}` });
     }
     onClose();
     const paidBit = amt > 0 ? ` · ${inr(amt)} collected` : "";
@@ -288,6 +288,104 @@ export function SessionLogger({ episodeId, onClose }: { episodeId: string; onClo
           className="rounded-full bg-accent px-4 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
         >
           Done{willComplete ? " — completes the course" : ""}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+/** Converts a consultation into an active course — plan decided, patient accepted. */
+export function StartCourse({ episodeId, onClose }: { episodeId: string; onClose: () => void }) {
+  const { db, today, startCourse, openEpisode, toast } = useApp();
+  const e = db.episodes.find((x) => x.id === episodeId)!;
+  const p = patientOf(db, e);
+  const waiting = daysBetween(e.start, today);
+
+  const [planned, setPlanned] = useState("12");
+  const [freq, setFreq] = useState<Freq>(3);
+  const [price, setPrice] = useState("");
+  const [paid, setPaid] = useState("");
+  const [firstDate, setFirstDate] = useState(addDays(today, 1));
+  const plannedN = parseInt(planned, 10) || 0;
+
+  const fieldCls =
+    "w-full rounded-[10px] border border-line bg-white px-3.5 py-2.5 text-sm outline-none focus:border-accent";
+
+  return (
+    <Sheet title={`Start course · ${p.name}`} onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <div className="text-sm text-muted">
+          {e.complaint} · consulted {waiting === 0 ? "today" : `${waiting}d ago`}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={label}>Sessions</label>
+            <input
+              inputMode="numeric"
+              value={planned}
+              onChange={(ev) => setPlanned(ev.target.value)}
+              className={`${fieldCls} tnum`}
+            />
+          </div>
+          <div>
+            <label className={label}>Frequency</label>
+            <select
+              value={freq}
+              onChange={(ev) => setFreq(Number(ev.target.value) as Freq)}
+              className={fieldCls}
+            >
+              <option value={1}>1× per week</option>
+              <option value={2}>2× per week</option>
+              <option value={3}>3× per week</option>
+            </select>
+          </div>
+          <div>
+            <label className={label}>Package price ₹</label>
+            <input
+              inputMode="numeric"
+              placeholder="7200"
+              value={price}
+              onChange={(ev) => setPrice(ev.target.value)}
+              className={`${fieldCls} tnum`}
+            />
+          </div>
+          <div>
+            <label className={label}>Paid now ₹</label>
+            <input
+              inputMode="numeric"
+              placeholder="0"
+              value={paid}
+              onChange={(ev) => setPaid(ev.target.value)}
+              className={`${fieldCls} tnum`}
+            />
+          </div>
+        </div>
+        <div>
+          <label className={label}>First session</label>
+          <input
+            type="date"
+            value={firstDate}
+            onChange={(ev) => setFirstDate(ev.target.value)}
+            className={`${fieldCls} tnum`}
+          />
+        </div>
+        <button
+          onClick={() => {
+            startCourse(episodeId, {
+              planned: plannedN,
+              freq,
+              price: parseFloat(price) || 0,
+              paid: parseFloat(paid) || 0,
+              firstDate,
+            });
+            onClose();
+            openEpisode(episodeId);
+            toast("Course started ✓");
+          }}
+          disabled={plannedN <= 0 || !firstDate}
+          className="rounded-full bg-accent px-4 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Start course
         </button>
       </div>
     </Sheet>

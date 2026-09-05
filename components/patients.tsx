@@ -32,6 +32,9 @@ export function PatientsList() {
         <div className="divide-y divide-line">
           {patients.map((p) => {
             const active = db.episodes.find((e) => e.patientId === p.id && e.status === "active");
+            const consult = active
+              ? undefined
+              : db.episodes.find((e) => e.patientId === p.id && e.status === "consult");
             return (
               <button
                 key={p.id}
@@ -49,6 +52,11 @@ export function PatientsList() {
                       <div className="tnum">
                         S{done(active)} of {active.planned}
                       </div>
+                    </>
+                  ) : consult ? (
+                    <>
+                      <div className="max-w-[160px] truncate">{consult.complaint}</div>
+                      <div className="text-amber-deep">Consult pending</div>
                     </>
                   ) : (
                     "No active course"
@@ -106,19 +114,28 @@ export function PatientDetail({ id }: { id: string }) {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">{e.complaint}</div>
                   <div className="tnum text-sm text-muted">
-                    {done(e)} of {e.planned} · started {fmtDay(e.start)}
+                    {e.status === "consult" ? "consultation" : `${done(e)} of ${e.planned}`} · started{" "}
+                    {fmtDay(e.start)}
                   </div>
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
                     e.status === "active"
                       ? "bg-soft text-accent"
-                      : e.status === "completed"
-                        ? "bg-line text-muted"
-                        : "bg-danger/10 text-danger"
+                      : e.status === "consult"
+                        ? "bg-amber/10 text-amber-deep"
+                        : e.status === "completed"
+                          ? "bg-line text-muted"
+                          : "bg-danger/10 text-danger"
                   }`}
                 >
-                  {e.status === "active" ? "Active" : e.status === "completed" ? "Completed" : "Dropped"}
+                  {e.status === "active"
+                    ? "Active"
+                    : e.status === "consult"
+                      ? "Consult"
+                      : e.status === "completed"
+                        ? "Completed"
+                        : "Dropped"}
                 </span>
               </button>
             ))}

@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import {
-  allRows, atRiskEpisodes, completedRows, daysSinceLastVisit, done, hasSessionOn,
-  lastVisit, missedRows, moneyAtRisk, noDateRows, outstanding, paidAhead, patientOf,
-  recordedTodayRows, tabCounts, todayRows, upcomingRows, type Tab,
+  allRows, atRiskEpisodes, completedRows, consultFeeOf, consultRows, daysBetween,
+  daysSinceLastVisit, done, hasSessionOn, lastVisit, missedRows, moneyAtRisk,
+  noDateRows, outstanding, paidAhead, patientOf, recordedTodayRows, tabCounts,
+  todayRows, upcomingRows, type Tab,
 } from "@/lib/derive";
 import { fmtDay, inr, upcomingLabel } from "@/lib/format";
 import type { Episode } from "@/lib/types";
@@ -13,6 +14,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "missed", label: "Missed" },
   { key: "nodate", label: "No date" },
+  { key: "consult", label: "Consults" },
   { key: "upcoming", label: "Upcoming" },
   { key: "completed", label: "Completed" },
   { key: "all", label: "All" },
@@ -47,6 +49,7 @@ export function Board({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
       {tab === "today" && <TodayList />}
       {tab === "missed" && <AtRiskList kind="missed" />}
       {tab === "nodate" && <AtRiskList kind="nodate" />}
+      {tab === "consult" && <ConsultsList />}
       {tab === "upcoming" && <UpcomingList />}
       {tab === "completed" && <CompletedList />}
       {tab === "all" && <AllList />}
@@ -245,6 +248,52 @@ function AtRiskList({ kind }: { kind: "missed" | "nodate" }) {
   );
 }
 
+// ---- Consults (consulted, course not started yet — the second leak) ----
+
+function ConsultsList() {
+  const { db, today, openEpisode, openStartCourse } = useApp();
+  const rows = consultRows(db);
+  if (rows.length === 0) return <Empty text="No consultations waiting" />;
+
+  return (
+    <Card>
+      {rows.map((e) => {
+        const p = patientOf(db, e);
+        const waiting = daysBetween(e.start, today);
+        const fee = consultFeeOf(e);
+        return (
+          <button
+            key={e.id}
+            onClick={() => openEpisode(e.id)}
+            className={`flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-ground ${
+              waiting > 3 ? "border-l-4 border-l-amber pl-3" : ""
+            }`}
+          >
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-semibold">{p.name}</div>
+              <div className="truncate text-sm text-muted">
+                {e.complaint} · consulted {waiting === 0 ? "today" : `${waiting}d ago`}
+                {fee > 0 ? ` · fee ${inr(fee)}` : ""}
+              </div>
+            </div>
+            <span
+              role="button"
+              onClick={(ev) => {
+                ev.stopPropagation();
+                openStartCourse(e.id);
+              }}
+              aria-label={`Start course for ${p.name}`}
+              className="shrink-0 rounded-full bg-accent px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+            >
+              Start course
+            </span>
+          </button>
+        );
+      })}
+    </Card>
+  );
+}
+
 // ---- Upcoming ----
 
 function UpcomingList() {
@@ -311,7 +360,8 @@ function CompletedList() {
             <div className="min-w-0 flex-1">
               <div className="truncate font-semibold">{p.name}</div>
               <div className="truncate text-sm text-muted">
-                {e.complaint} · {done(e)} of {e.planned} · last {fmtDay(lastVisit(e))}
+                {e.complaint} · {e.planned === 0 ? "consult only" : `${done(e)} of ${e.planned}`} ·
+                last {fmtDay(lastVisit(e))}
               </div>
             </div>
             <span
@@ -369,7 +419,8 @@ function AllList() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">{p.name}</div>
                   <div className="truncate text-sm text-muted">
-                    {e.complaint} · S{done(e)} of {e.planned}
+                    {e.complaint}
+                    {e.status === "consult" ? " · consultation" : ` · S${done(e)} of ${e.planned}`}
                     {active && e.next ? ` · next ${fmtDay(e.next)}` : ""}
                   </div>
                 </div>
@@ -377,12 +428,20 @@ function AllList() {
                   className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
                     active
                       ? "bg-soft text-accent"
-                      : e.status === "completed"
-                        ? "bg-line text-muted"
-                        : "bg-danger/10 text-danger"
+                      : e.status === "consult"
+                        ? "bg-amber/10 text-amber-deep"
+                        : e.status === "completed"
+                          ? "bg-line text-muted"
+                          : "bg-danger/10 text-danger"
                   }`}
                 >
-                  {active ? "Active" : e.status === "completed" ? "Completed" : "Dropped"}
+                  {active
+                    ? "Active"
+                    : e.status === "consult"
+                      ? "Consult"
+                      : e.status === "completed"
+                        ? "Completed"
+                        : "Dropped"}
                 </span>
               </button>
             );

@@ -10,9 +10,13 @@ const field =
 const label = "mb-1 block text-xs font-semibold uppercase tracking-wider text-muted";
 
 export function IntakeForm({ patientId }: { patientId?: string }) {
-  const { db, today, createIntake, closeIntake, openEpisode, toast } = useApp();
+  const { db, today, createIntake, createConsult, closeIntake, openEpisode, toast } = useApp();
   const fixed = patientId ? db.patients.find((p) => p.id === patientId) : undefined;
 
+  // Two paths: plan already fixed → start the course now; otherwise register a consult.
+  const [path, setPath] = useState<"course" | "consult">("course");
+  const [fee, setFee] = useState("");
+  const [consultNote, setConsultNote] = useState("");
   const [phone, setPhone] = useState("");
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [dupDismissed, setDupDismissed] = useState(false);
@@ -42,20 +46,36 @@ export function IntakeForm({ patientId }: { patientId?: string }) {
   const physios = db.staff.filter((s) => s.role === "physio" && s.active);
 
   const plannedN = parseInt(planned, 10) || 0;
+  const baseOk =
+    (existingPatient || name.trim().length > 0) && complaint.trim().length > 0 && physioId !== "";
   const canSave =
-    (existingPatient || name.trim().length > 0) &&
-    complaint.trim().length > 0 &&
-    plannedN > 0 &&
-    physioId !== "" &&
-    firstDate !== "";
+    path === "consult" ? baseOk : baseOk && plannedN > 0 && firstDate !== "";
 
   const save = () => {
     if (!canSave) return;
-    const id = createIntake({
+    const patientFields = {
       patientId: existingPatient?.id,
       name: name.trim(),
       phone,
       age: age ? parseInt(age, 10) : undefined,
+    };
+    if (path === "consult") {
+      const id = createConsult({
+        ...patientFields,
+        complaint,
+        doctor,
+        physioId,
+        fee: parseFloat(fee) || 0,
+        note: consultNote,
+        prescription: rx,
+      });
+      closeIntake();
+      openEpisode(id);
+      toast("Consult registered ✓");
+      return;
+    }
+    const id = createIntake({
+      ...patientFields,
       complaint,
       doctor,
       physioId,
@@ -80,6 +100,25 @@ export function IntakeForm({ patientId }: { patientId?: string }) {
         <button onClick={closeIntake} className="text-sm text-muted hover:text-ink">
           Cancel
         </button>
+      </div>
+
+      <div className="flex overflow-hidden rounded-full border border-line bg-white text-sm">
+        {(
+          [
+            ["course", "Start course now"],
+            ["consult", "Consult first"],
+          ] as const
+        ).map(([key, lbl]) => (
+          <button
+            key={key}
+            onClick={() => setPath(key)}
+            className={`flex-1 px-3 py-2 transition-colors ${
+              path === key ? "bg-soft font-semibold text-accent" : "text-muted hover:text-ink"
+            }`}
+          >
+            {lbl}
+          </button>
+        ))}
       </div>
 
       {/* Phone first — drives the live duplicate check */}
@@ -181,68 +220,109 @@ export function IntakeForm({ patientId }: { patientId?: string }) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={label}>Sessions</label>
-          <input
-            className={`${field} tnum`}
-            inputMode="numeric"
-            value={planned}
-            onChange={(ev) => setPlanned(ev.target.value)}
-          />
+      {path === "course" ? (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={label}>Sessions</label>
+            <input
+              className={`${field} tnum`}
+              inputMode="numeric"
+              value={planned}
+              onChange={(ev) => setPlanned(ev.target.value)}
+            />
+          </div>
+          <div>
+            <label className={label}>Frequency</label>
+            <select
+              className={field}
+              value={freq}
+              onChange={(ev) => setFreq(Number(ev.target.value) as Freq)}
+            >
+              <option value={1}>1× per week</option>
+              <option value={2}>2× per week</option>
+              <option value={3}>3× per week</option>
+            </select>
+          </div>
+          <div>
+            <label className={label}>Package price ₹</label>
+            <input
+              className={`${field} tnum`}
+              inputMode="numeric"
+              placeholder="7200"
+              value={price}
+              onChange={(ev) => setPrice(ev.target.value)}
+            />
+          </div>
+          <div>
+            <label className={label}>Paid now ₹</label>
+            <input
+              className={`${field} tnum`}
+              inputMode="numeric"
+              placeholder="0"
+              value={paid}
+              onChange={(ev) => setPaid(ev.target.value)}
+            />
+          </div>
+          <div>
+            <label className={label}>Primary physio</label>
+            <select className={field} value={physioId} onChange={(ev) => setPhysioId(ev.target.value)}>
+              {physios.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={label}>First session</label>
+            <input
+              type="date"
+              className={`${field} tnum`}
+              value={firstDate}
+              onChange={(ev) => setFirstDate(ev.target.value)}
+            />
+          </div>
         </div>
-        <div>
-          <label className={label}>Frequency</label>
-          <select
-            className={field}
-            value={freq}
-            onChange={(ev) => setFreq(Number(ev.target.value) as Freq)}
-          >
-            <option value={1}>1× per week</option>
-            <option value={2}>2× per week</option>
-            <option value={3}>3× per week</option>
-          </select>
-        </div>
-        <div>
-          <label className={label}>Package price ₹</label>
-          <input
-            className={`${field} tnum`}
-            inputMode="numeric"
-            placeholder="7200"
-            value={price}
-            onChange={(ev) => setPrice(ev.target.value)}
-          />
-        </div>
-        <div>
-          <label className={label}>Paid now ₹</label>
-          <input
-            className={`${field} tnum`}
-            inputMode="numeric"
-            placeholder="0"
-            value={paid}
-            onChange={(ev) => setPaid(ev.target.value)}
-          />
-        </div>
-        <div>
-          <label className={label}>Primary physio</label>
-          <select className={field} value={physioId} onChange={(ev) => setPhysioId(ev.target.value)}>
-            {physios.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={label}>First session</label>
-          <input
-            type="date"
-            className={`${field} tnum`}
-            value={firstDate}
-            onChange={(ev) => setFirstDate(ev.target.value)}
-          />
-        </div>
-      </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={label}>Consult fee ₹</label>
+              <input
+                className={`${field} tnum`}
+                inputMode="numeric"
+                placeholder="400"
+                value={fee}
+                onChange={(ev) => setFee(ev.target.value)}
+              />
+            </div>
+            <div>
+              <label className={label}>Primary physio</label>
+              <select className={field} value={physioId} onChange={(ev) => setPhysioId(ev.target.value)}>
+                {physios.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className={label}>Assessment note (optional)</label>
+            <textarea
+              rows={2}
+              className={`${field} resize-y`}
+              placeholder="Findings, suggested plan, what happens next…"
+              value={consultNote}
+              onChange={(ev) => setConsultNote(ev.target.value)}
+            />
+          </div>
+          <div className="rounded-[10px] bg-soft px-3.5 py-2.5 text-sm text-muted">
+            The course plan (sessions, price) is set later from the Consults tab, once the
+            patient accepts it.
+          </div>
+        </>
+      )}
 
       <div>
         <label className={label}>Prescription photo (optional)</label>
@@ -293,7 +373,7 @@ export function IntakeForm({ patientId }: { patientId?: string }) {
         disabled={!canSave}
         className="mt-1 rounded-full bg-accent px-4 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        Save episode
+        {path === "consult" ? "Register consult" : "Save episode"}
       </button>
     </div>
   );
