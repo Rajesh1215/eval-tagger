@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ground: #fbfaf8;
+  --color-ink: #1c2320;
+  --color-muted: #68716b;
+  --color-line: #e7e4dd;
+  --color-accent: #0e7c66;
+  --color-soft: #e3f1ed;
+  --color-amber: #d97706;
+  --color-amber-deep: #a16207;
+  --color-danger: #b3261e;
+  --color-panel: #10231e;
+
+  --font-sans: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Two-pane layout kicks in at ~880px */
+  --breakpoint-desk: 55rem;
+}
+
+body {
+  @apply bg-ground text-ink font-sans antialiased;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="range"] {
+  accent-color: var(--color-accent);
+}
+
+::selection {
+  background: var(--color-soft);
+}
